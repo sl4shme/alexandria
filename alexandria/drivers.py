@@ -81,8 +81,8 @@ class Redfish(Driver):
         #remote_mgmt = redfish.connect(ci.ip_mgmt, ci.login, ci.password, verify_cert=False)
         remote_mgmt = redfish.connect(ci.ip_mgmt, ci.login, ci.password, simulator=True, enforceSSL=False)
                                        
-        ci.ci_type = remote_mgmt.Systems.systems_list[0].get_parameter("@odata.type")
-        ci.data = remote_mgmt.Systems.systems_list[0].get_parameters()
+        ci.ci_type = remote_mgmt.Systems.systems_dict.values()[0].get_parameter("@odata.type")
+        ci.data = remote_mgmt.Systems.systems_dict.values()[0].get_parameters()
                 
         #print("Redfish API version : {} \n".format(remote_mgmt.get_api_version()))       
         return True
