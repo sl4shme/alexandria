@@ -21,5 +21,5 @@ setup(
 
     packages=["alexandria"],
 
-    scripts=["alexandria/app.py"]
+    entry_points={'console_scripts': ['alexandria = alexandria.app:main']}
 )
