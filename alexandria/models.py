@@ -6,13 +6,13 @@ import os
 import re
 import config
 
+
 class Model(object):
     """Implements Alexandria reference model."""
     def __init__(self):
         self.logger = ""
         self.reference_items = []
         self.read_ref_files()
-        
 
     def read_ref_files(self):
         cwd = os.getcwd()
@@ -27,8 +27,8 @@ class Model(object):
             # Derive attribute name from file.
             attr_name = os.path.basename(file)
             attr_name = re.sub(r"\..*$", "", attr_name)
-            attr_name = "__" + attr_name # Make it private 
-            
+            attr_name = "__" + attr_name  # Make it private
+
             # read json file
             with open(file) as json_data:
                 data_structure = json.load(json_data)
@@ -39,10 +39,8 @@ class Model(object):
             self.reference_items.append(attr_name)
         return True
 
-    def get_model(self,model_name):
+    def get_model(self, model_name):
         if not model_name[0:1] == "__":
             model_name = "__" + model_name
         model = getattr(self, model_name)
         return model.copy()
-        
-        

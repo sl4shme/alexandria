@@ -8,7 +8,6 @@ import requests
 
 
 class Driver(object):
-
     def __init__(self):
         self.driver_type = self.__class__.__name__
         # Get credentials from conf files for CMDB
@@ -25,71 +24,173 @@ class Driver(object):
 
 
 class Itop(Driver):
+    def make_request(self, json_data):
+        conf = config.alexandria.conf_file
+        username = conf.get_driver_parameters("itop", "loginItop")
+        password = conf.get_driver_parameters("itop", "passwordItop")
+        urlbase = conf.get_driver_parameters("itop", "endpoint")
+        urlparams = {'version': '1.0',
+                     'auth_user': username,
+                     'auth_pwd': password}
 
-    def get_ci(self, ci):
-        print("Get from itop")
-        return True
+        urlparams['json_data'] = json.dumps(json_data)
+        url = urlbase + '?' + urllib.urlencode(urlparams)
+        result = requests.post(url, auth=(username, password))
+        if result.status_code != 200:
+            raise(requests.HTTPError("Code: {} / Result: {}".format(
+                result.status_code, result.text)))
+        return result.json().get("objects"), result.text
+
+    def get_object(self, ci_type, fields, identifier="name"):
+        json_data = {"operation": "core/get",
+                     "class": ci_type,
+                     "output_fields": "*",
+                     "key": 'SELECT {} WHERE {} = "{}"'.format(
+                         ci_type, identifier, fields[identifier])
+                     }
+        objects, text = self.make_request(json_data)
+        if objects is not None:
+            try:
+                return int(objects.values()[0]['key'])
+            except:
+                raise ValueError("Found an object present "
+                                 "but can't find its id")
+
+    def create_ci(self, ci_type, fields, identifier="name"):
+        json_data = {"operation": "core/create",
+                     "comment": "Synchronization from Alexandria",
+                     "class": ci_type,
+                     "output_fields": "*",
+                     "fields": fields}
+        objects, text = self.make_request(json_data)
+        if objects is not None:
+            try:
+                print("Created CI: {} ({})".format(fields[identifier],
+                                                   ci_type))
+                return int(objects.values()[0]['key'])
+            except:
+                raise ValueError("Created a CI but can't find its id")
+        else:
+            raise ValueError("Could not create CI: {} ({}) / Error: {}".format(
+                fields[identifier], ci_type, text))
+
+    def update_ci(self, ci_type, fields, identifier="name"):
+        json_data = {"operation": "core/update",
+                     "comment": "Synchronization from Alexandria",
+                     "class": ci_type,
+                     "output_fields": "*",
+                     "key": 'SELECT {} WHERE {} = "{}"'.format(
+                         ci_type, identifier, fields[identifier]),
+                     "fields": fields
+                     }
+        objects, text = self.make_request(json_data)
+        if objects is not None:
+            try:
+                print("Updated CI: {} ({})".format(fields[identifier],
+                                                   ci_type))
+                return int(objects.values()[0]['key'])
+            except:
+                raise ValueError("Updated a CI but can't find its id")
+        else:
+            raise ValueError("Could not update CI: {} ({}) / Error: {}".format(
+                fields[identifier], ci_type, text))
+
+    def process_ci(self, ci_type, fields, identifier="name"):
+        if not isinstance(fields, dict):
+            raise TypeError('"fields" should be a dictionary')
+        if fields.get(identifier) is None:
+            raise TypeError('"fields" should contain'
+                            'a "{}" key'.format(identifier))
+
+        if self.get_object(ci_type, fields, identifier) is not None:
+            return self.update_ci(ci_type, fields, identifier)
+        else:
+            return self.create_ci(ci_type, fields, identifier)
 
     def set_ci(self, ci):
-        username = config.alexandria.conf_file.get_driver_parameters("itop", "loginItop")
-        password = config.alexandria.conf_file.get_driver_parameters("itop", "passwordItop")
-        config.logger.debug("login : {}, password : {}".format(
-                                                               username,
-                                                               password
-                                                               )
-                            )
-        # Craft request body and header
-        urlbase = config.alexandria.conf_file.get_driver_parameters("itop", "endpoint")
-        
-              
-        request = '{"operation":"core/create","comment":"Synchronization from Alexandria","class":"Server","output_fields":"id,name,ram", "fields":{"org_id": "3","name":"' + ci.data["Name"] + '","ram":"' + format((ci.data["MemorySummary"])["TotalSystemMemoryGiB"]) + '","serialnumber":"' + ci.data["SerialNumber"] + '"}}'
-        
-        urlparam = {'version' : '1.0',
-                    'auth_user' : username,
-                    'auth_pwd' : password,
-                    'json_data' : request
-                    }
-        
-        #header = {'Content-type': 'application/json'}
-        
-        url = urlbase + '?' + urllib.urlencode(urlparam)
-        
-        config.logger.debug(url)
-        
-        #=======================================================================
-        # answer = requests.post(url,
-        #                      headers=header,
-        #                      verify="False"
-        #                     )
-        #=======================================================================
-        answer = requests.post(url,
-                               auth=(username,password)
-                              )
-        
-        config.logger.debug(answer.status_code)
-        config.logger.debug(answer.text)
+        org_name = config.alexandria.conf_file.get_driver_parameters(
+                "itop", "organization_name")
+
+        brand_id = self.process_ci("Brand", {"name": ci.data.get(
+            'Manufacturer', 'Undefined')})
+
+#     "power": serv_data['Oem']['Hp']['PowerAllocationLimit'],
+
+        fields = {"org_id": self.process_ci("Organization",
+                                            {"name": org_name}),
+                  "name": ci.data.get("Name", "Undefined"),
+                  "cpu": ci.data.get('Processors',
+                                     {'Count': 'Undefined'})['Count'],
+                  "ram": ci.data.get('Memory',
+                                     {"TotalSystemMemoryGB": "Undefined"})[
+                                         'TotalSystemMemoryGB'],
+                  "serialnumber": ci.data.get("SerialNumber", "Undefined"),
+                  "brand_id": brand_id,
+                  "model_id": self.process_ci("Model", {"name": ci.data.get(
+                                                        'Model', "Undefined"),
+                                                        "type": "Server",
+                                                        "brand_id": brand_id}),
+                  }
+
+        server_id = self.process_ci("Server", fields, 'serialnumber')
+
+        [self.process_ci("PhysicalInterface", {"name": i.get('Name',
+                                                             'Undefined'),
+                                               "macaddress": i.get(
+                                               'MACAddress', "Undefined"),
+                                               "speed": i.get('SpeedMbps',
+                                                              "Undefined"),
+                                               "connectableci_id": server_id},
+                         'macaddress') for i in ci.interfaces]
+
+        [self.process_ci("FiberChannelInterface", {"name": i.get('name',
+                                                                 'Undefined'),
+                                                   "wwn": i.get('wwn',
+                                                                'Undefined'),
+                                                   "speed": i.get('speed',
+                                                                  'Undefined'),
+                                                   "topology": i.get(
+                                                   'topology', 'Undefined'),
+                                                   "datacenterdevice_id":
+                                                       server_id},
+                         'wwn') for i in ci.fc_ports]
 
 
 class Redfish(Driver):
-
-    def get_ci(self,ci):
+    def get_ci(self, ci):
         print("Get from redfish")
         import redfish
-        
-        print(ci.ip_mgmt + " - " + ci.login + " - " + ci.password)
-        
-        #remote_mgmt = redfish.connect(ci.ip_mgmt, ci.login, ci.password, verify_cert=False)
-        remote_mgmt = redfish.connect(ci.ip_mgmt, ci.login, ci.password, simulator=True, enforceSSL=False)
-                                       
-        ci.ci_type = remote_mgmt.Systems.systems_list[0].get_parameter("@odata.type")
-        ci.data = remote_mgmt.Systems.systems_list[0].get_parameters()
-                
-        #print("Redfish API version : {} \n".format(remote_mgmt.get_api_version()))       
+
+        print(ci.url_mgmt + " - " + ci.login + " - " + ci.password)
+
+        remote_mgmt = redfish.connect(ci.url_mgmt, ci.login,
+                                      ci.password, verify_cert=False,
+                                      enforceSSL=False)
+
+#        remote_mgmt = redfish.connect(ci.ip_mgmt, ci.login, ci.password,
+#                                      simulator=True, enforceSSL=False)
+
+        system = remote_mgmt.Systems.systems_dict.values()[0]
+        ci.ci_type = system.get_parameter("Type")
+        ci.data = system.data
+        interface_collection = system.ethernet_interfaces_collection
+        if interface_collection is not None:
+            ci.interfaces = [interface.data for interface in
+                             interface_collection.
+                             ethernet_interfaces_dict.values()]
+        else:
+            ci.interfaces = []
+
+        ci.fc_ports = []
+
+        # print("Redfish API version"
+        #       " : {} \n".format(remote_mgmt.get_api_version()))
         return True
 
     def set_ci(self, ci):
-        print "Push to Redfish"
+        print("Push to Redfish")
         return True
+
 
 class Ironic(Driver):
     pass
@@ -112,10 +213,10 @@ class Fakecmdb(Driver):
             jsonfile.close()
 
         #
-        #=======================================================================
+        # ====================================================================
+
 
 class Fakeprovider(Driver):
-
     def get_ci(self, ci):
         # Simulate a driver that will provide Manager data.
 
@@ -124,24 +225,20 @@ class Fakeprovider(Driver):
         # Assuming the connection is ok.
 
         # Now create a copy of manager model from reference model.
-        #ci.ci_type = "Manager"
-        #ci.data = config.alexandria.model.get_model("Manager")
+        # ci.ci_type = "Manager"
+        # ci.data = config.alexandria.model.get_model("Manager")
 
-        # Update the structure with data
-        # TODO : think to encapsulate to not edit ci.data directly.
-        #        This could be also a way to check source of truth.
-        #        If data provided by our driver is not the source of truth
-        #        then discard it.
+        #  Update the structure with data
+        #  TODO : think to encapsulate to not edit ci.data directly.
+        #         This could be also a way to check source of truth.
+        #         If data provided by our driver is not the source of truth
+        #         then discard it.
 
+        # ci.data["ManagerType"] = "BMC"
+        # ci.data["Model"] = "Néné Manager"
+        # ci.data["FirmwareVersion"] = "1.00"
 
-        #ci.data["ManagerType"] = "BMC"
-        #ci.data["Model"] = "Néné Manager"
-        #ci.data["FirmwareVersion"] = "1.00"
-
-
-
-
-        #if ci.data is config.alexandria.model.Manager:
+        # if ci.data is config.alexandria.model.Manager:
         #    print "identical"
 
         pp = pprint.PrettyPrinter(indent=4)

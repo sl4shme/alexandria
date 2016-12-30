@@ -1,6 +1,6 @@
 # coding=utf-8
 
-import pprint
+# import pprint
 import logging
 from logging.handlers import RotatingFileHandler
 from flask import Flask
@@ -18,7 +18,7 @@ app.debug = True
 config.logger = app.logger
 
 
-@app.route("/drivers", methods = ["GET"])
+@app.route("/drivers", methods=["GET"])
 def api_drivers():
     """Return drivers.
 
@@ -27,7 +27,7 @@ def api_drivers():
     :returns:  http response
 
     """
-    data = {"drivers" : config.alexandria.conf_file.get_drivers()}
+    data = {"drivers": config.alexandria.conf_file.get_drivers()}
     resp = jsonify(data)
     resp.status_code = 200
     return resp
@@ -35,7 +35,8 @@ def api_drivers():
 
 @app.route("/drivers/<driver_name>")
 def api_driver(driver_name):
-    data = {driver_name : config.alexandria.conf_file.get_driver_info(driver_name)}
+    data = {driver_name: config.alexandria.conf_file.get_driver_info(
+        driver_name)}
     resp = jsonify(data)
     resp.status_code = 200
     return resp
@@ -56,18 +57,18 @@ def bruno():
 
 @app.route('/ci', methods=['POST'])
 def create_ci():
-    pp = pprint.PrettyPrinter(indent=4)
+    # pp = pprint.PrettyPrinter(indent=4)
 
     ci = configuration_item.ConfigurationItem(request.json["uuid"],
-                              request.json["url_mgmt"],
-                              request.json["login"],
-                              request.json["password"])
+                                              request.json["url_mgmt"],
+                                              request.json["login"],
+                                              request.json["password"])
 
     # TODO : Error case uuid already available
     #        Uuid malformed
     #        Generate a random uuid (check uuid module) if uuid = None
 
-    alexandria_cis.update({request.json["uuid"]: ci })
+#    alexandria_cis.update({request.json["uuid"]: ci })
 
     # Synchronize data beetween all our drivers
     synchronize_ci(ci)
@@ -75,7 +76,7 @@ def create_ci():
     app.logger.debug("citype {}".format(ci.ci_type))
 
     # TODO : Remove next line, used just for debugging...
-    pp.pprint(alexandria_cis)
+#    pp.pprint(alexandria_cis)
 
     app.logger.debug("Debug message")
 
@@ -91,14 +92,16 @@ def create_ci():
 def synchronize_ci(ci):
     # Now do a "broadcast" get to all our drivers
     for driver in config.alexandria.drivers:
-        app.logger.info("Get information from {} driver.".format(driver.get_driver_type()))
+        app.logger.info("Get information from {} driver.".format(
+            driver.get_driver_type()))
         driver.get_ci(ci)
 
     # TODO : implement checksum to not push data if there is no change.
 
     # Push the data provided above to all our drivers
     for driver in config.alexandria.drivers:
-        app.logger.info("Push information to {} driver.".format(driver.get_driver_type()))
+        app.logger.info("Push information to {} driver.".format(
+            driver.get_driver_type()))
         driver.set_ci(ci)
 
 
@@ -107,11 +110,11 @@ def update_ci():
     pass
 
 
-@app.route("/", methods = ["GET"])
+@app.route("/", methods=["GET"])
 def api_root():
     data = {
-        "Service"  : config.alexandria.NAME,
-        "Version" : config.alexandria.VERSION
+        "Service": config.alexandria.NAME,
+        "Version": config.alexandria.VERSION
     }
 
     resp = jsonify(data)
@@ -129,7 +132,7 @@ def shutdown_server():
     func()
 
 
-def configure_logger(logger,logfile):
+def configure_logger(logger, logfile):
 
     formatter = logging.Formatter(
         '%(asctime)s :: %(levelname)s :: %(message)s'
@@ -146,13 +149,10 @@ def main():
     # Vars
     app_logfile = "/var/log/alexandria/alexandria.log"
 
-    # Define a PrettyPrinter for debugging.
-    pp = pprint.PrettyPrinter(indent=4)
-
     # Define a structure to handle ci
     # TODO : derivate a ci_collection class from dict.
     #        (same mechanism as drivers)
-    alexandria_cis = {}
+    # alexandria_cis = {}
 
     # Initialise, so create a global config.alexandria object.
     config.initialise_alexandria()
@@ -162,12 +162,12 @@ def main():
     config.alexandria.model.logger = app.logger
 
     # TODO : Debugging stuff to remove later.
-    #print config.alexandria.model.reference_items
-    #print config.alexandria.drivers.itop.get_ci(None)
-    #print config.alexandria.drivers.redfish.get_ci(None)
-    #print config.alexandria.drivers.itop.driver_type
-    #pp.pprint(models.EthernetInterface)  # debugging example.
-    #pp.pprint(models.Manager)  # debugging example.
+    # print config.alexandria.model.reference_items
+    # print config.alexandria.drivers.itop.get_ci(None)
+    # print config.alexandria.drivers.redfish.get_ci(None)
+    # print config.alexandria.drivers.itop.driver_type
+    # pp.pprint(models.EthernetInterface)  # debugging example.
+    # pp.pprint(models.Manager)  # debugging example.
     app.logger.info("Starting %s...", config.alexandria.NAME)
     app.run(port=int(config.alexandria.conf_file.get_alexandria_port()))
 
