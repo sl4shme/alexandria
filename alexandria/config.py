@@ -2,6 +2,7 @@
 
 import sys
 import ConfigParser
+import getopt
 import models
 import drivers
 
@@ -9,39 +10,46 @@ import drivers
 logger = None
 alexandria = None
 
+
 def initialise_alexandria():
     """Define alexandria global object so it can be called from anywhere."""
     global alexandria
     # TODO : at a protection to not initialise twice.
     alexandria = Alexandria()
 
+
 class Alexandria(object):
     def __init__(self):
         self.NAME = "Alexandria"
         self.VERSION = "0.1"
-        
+
         # Model
         self.model = models.Model()
-        
+
         # Configuration file
-        self.conf_file = AlexandriaConfiguration("alexandria.conf")
+        user_config_file = getopt.getopt(sys.argv[1:], 'c', ['config'])[1]
+        if user_config_file != []:
+            self.conf_file = AlexandriaConfiguration(user_config_file[0])
+        else:
+            self.conf_file = AlexandriaConfiguration("alexandria.conf")
 
         # Build driver list from configuration file
         driver_name_list = self.conf_file.get_drivers()
-        
-        self.drivers = drivers.DriverCollection()    
+
+        self.drivers = drivers.DriverCollection()
 
         # Create objects !!!! TO BE CONTINUED !!!!
         for driver_name in driver_name_list:
             # Get class
-            driver_class = getattr(sys.modules["drivers"], driver_name.capitalize())
+            driver_class = getattr(sys.modules["alexandria.drivers"],
+                                   driver_name.capitalize())
             # Create object
             driver_object = driver_class()
             # Add to driver list
-            self.drivers.append(driver_object) 
+            self.drivers.append(driver_object)
             index = self.drivers.index(driver_object)
             # Set an attribute to the coresponding driver
-            setattr(self.drivers, driver_name.lower(), self.drivers[index])                      
+            setattr(self.drivers, driver_name.lower(), self.drivers[index])
 
 
 class AlexandriaConfiguration(object):
@@ -55,11 +63,11 @@ class AlexandriaConfiguration(object):
         drivers.remove("alexandria")
         return drivers
 
-    def get_driver_info(self,driver):
+    def get_driver_info(self, driver):
         return self.config.options(driver)
 
     def get_alexandria_port(self):
         return self.config.get("alexandria", "port")
-    
+
     def get_driver_parameters(self, drivername, parameters):
         return self.config.get(drivername, parameters)
