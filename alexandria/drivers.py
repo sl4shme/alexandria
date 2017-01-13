@@ -35,10 +35,11 @@ class Itop(Driver):
 
         urlparams['json_data'] = json.dumps(json_data)
         url = urlbase + '?' + urllib.urlencode(urlparams)
-        result = requests.post(url, auth=(username, password))
+        result = requests.post(url, auth=(username, password), verify=False)
         if result.status_code != 200:
             raise(requests.HTTPError("Code: {} / Result: {}".format(
                 result.status_code, result.text)))
+
         return result.json().get("objects"), result.text
 
     def get_object(self, ci_type, fields, identifier="name"):
