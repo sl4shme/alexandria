@@ -35,11 +35,14 @@ class Itop(Driver):
 
         urlparams['json_data'] = json.dumps(json_data)
         url = urlbase + '?' + urllib.urlencode(urlparams)
+
+        config.logger.info("Request to Itop: {}".format(str(json_data)))
         result = requests.post(url, auth=(username, password), verify=False)
         if result.status_code != 200:
             raise(requests.HTTPError("Code: {} / Result: {}".format(
                 result.status_code, result.text)))
 
+        config.logger.info("Answer from Itop: {}".format(str(result.json())))
         return result.json().get("objects"), result.text
 
     def get_object(self, ci_type, fields, identifier="name"):
@@ -66,8 +69,6 @@ class Itop(Driver):
         objects, text = self.make_request(json_data)
         if objects is not None:
             try:
-                print("Created CI: {} ({})".format(fields[identifier],
-                                                   ci_type))
                 return int(objects.values()[0]['key'])
             except:
                 raise ValueError("Created a CI but can't find its id")
@@ -87,14 +88,22 @@ class Itop(Driver):
         objects, text = self.make_request(json_data)
         if objects is not None:
             try:
-                print("Updated CI: {} ({})".format(fields[identifier],
-                                                   ci_type))
                 return int(objects.values()[0]['key'])
             except:
                 raise ValueError("Updated a CI but can't find its id")
         else:
             raise ValueError("Could not update CI: {} ({}) / Error: {}".format(
                 fields[identifier], ci_type, text))
+
+    def is_update_required(self, itop_current_object, fields):
+        update_required = False
+        for field in fields.items():
+            try:
+                if itop_current_object[field[0]] != field[1]:
+                    update_required = True
+            except KeyError:
+                update_required = True
+        return update_required
 
     def process_ci(self, ci_type, fields, identifier="name"):
         if not isinstance(fields, dict):
@@ -103,9 +112,26 @@ class Itop(Driver):
             raise TypeError('"fields" should contain'
                             'a "{}" key'.format(identifier))
 
-        if self.get_object(ci_type, fields, identifier) is not None:
-            return self.update_ci(ci_type, fields, identifier)
+        itop_current_object = self.get_object(ci_type, fields, identifier)
+        if itop_current_object is not None:
+            if self.is_update_required(itop_current_object, fields):
+                try:
+                    config.logger.info("Updating CI: {} ({})".format(
+                        fields[identifier], ci_type))
+                    return self.update_ci(ci_type, fields, identifier)
+                except Exception as e:
+                    config.logger.info(str(e))
+            else:
+                try:
+                    config.logger.info("CI is up-to-date: {} ({})".format(
+                        fields[identifier], ci_type))
+                    return itop_current_object['key']
+                except:
+                    raise ValueError("Found an object present "
+                                     "but can't find its id")
         else:
+            config.logger.info("Creating CI: {} ({})".format(
+                fields[identifier], ci_type))
             return self.create_ci(ci_type, fields, identifier)
 
     def set_ci(self, ci):
