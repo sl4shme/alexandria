@@ -55,7 +55,7 @@ class Itop(Driver):
         objects, text = self.make_request(json_data)
         if objects is not None:
             try:
-                return int(objects.values()[0]['key'])
+                return objects.values()[0]
             except:
                 raise ValueError("Found an object present "
                                  "but can't find its id")
@@ -85,7 +85,11 @@ class Itop(Driver):
                          ci_type, identifier, fields[identifier]),
                      "fields": fields
                      }
-        objects, text = self.make_request(json_data)
+        try:
+                objects, text = self.make_request(json_data)
+        except:
+            raise ValueError("Could not update CI: {} ({}) / Error: {}".format(
+                fields[identifier], ci_type, text))
         if objects is not None:
             try:
                 return int(objects.values()[0]['key'])
@@ -99,7 +103,8 @@ class Itop(Driver):
         update_required = False
         for field in fields.items():
             try:
-                if itop_current_object[field[0]] != field[1]:
+                if str(itop_current_object['fields'][field[0]]) != str(
+                       field[1]):
                     update_required = True
             except KeyError:
                 update_required = True
