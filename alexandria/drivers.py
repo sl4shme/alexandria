@@ -151,11 +151,11 @@ class Itop(Driver):
         fields = {"org_id": self.process_ci("Organization",
                                             {"name": org_name}),
                   "name": ci.data.get("Name", "Undefined"),
-                  "cpu": ci.data.get('Processors',
+                  "cpu": ci.data.get("processorSummary",
                                      {'Count': 'Undefined'})['Count'],
-                  "ram": ci.data.get('Memory',
-                                     {"TotalSystemMemoryGB": "Undefined"})[
-                                         'TotalSystemMemoryGB'],
+                  "ram": ci.data.get("MemorySummary",
+                                     {'TotalSystemMemoryGiB': 'Undefined'})[
+                                        'TotalSystemMemoryGiB'],
                   "serialnumber": ci.data.get("SerialNumber", "Undefined"),
                   "brand_id": brand_id,
                   "model_id": self.process_ci("Model", {"name": ci.data.get(
