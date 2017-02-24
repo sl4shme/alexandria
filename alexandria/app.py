@@ -73,13 +73,6 @@ def create_ci():
     # Synchronize data beetween all our drivers
     synchronize_ci(ci)
 
-    app.logger.debug("citype {}".format(ci.ci_type))
-
-    # TODO : Remove next line, used just for debugging...
-#    pp.pprint(alexandria_cis)
-
-    app.logger.debug("Debug message")
-
     # Craft response
     resp = jsonify(ci.data)
     resp.status_code = 200
